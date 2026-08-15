@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <title>HZFY 代码 OI 化</title>
+
+  <!-- 样式完全不变（省略重复，保持你原来的） -->
+  <style>
+    /* 你原来的 style 原样保留 */
+    footer {
+      margin-top: 24px;
+      font-size: 13px;
+      color: #6b7280;
+      text-align: left;
+    }
+
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --border: #d0d7de;
+      --p: #2563eb;
+      --s: #6b7280;
+      --g: #059669;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont;
+      background: var(--bg);
+      padding: 20px;
+    }
+
+    .w {
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    textarea,
+    pre {
+      width: 100%;
+      height: 260px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      resize: vertical;
+      overflow: auto;
+    }
+
+    .b {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    button {
+      padding: 10px 28px;
+      font-size: 15px;
+      border: none;
+      border-radius: 999px;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #r {
+      background: var(--p);
+    }
+
+    #u {
+      background: var(--s);
+    }
+
+    #d {
+      background: var(--g);
+    }
+
+    .drag {
+      border-color: #2563eb !important;
+      background: #eef2ff !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="w">
+    <h3>HZFY 代码 OI 化</h3>
+
+    <div class="panel">
+      <textarea id="i">
+#include <iostream>
+  int main(){
+      // comment
+      std::cout<<"// not a comment Hello";
+      return 0;
+  }
+      </textarea>
+      <pre id="o"></pre>
+    </div>
+
+    <div class="b">
+      <button id="u">上传</button>
+      <button id="r">格式化</button>
+      <button id="d">下载</button>
+    </div>
+
+    <footer>
+      警告: 可能有一些空格作者未没有及时去除,请各位客官自行去除 QwQ.
+    </footer>
+  </div>
+
+  <!-- ✅ 1. uncrustify（完全不动） -->
+  <script src="uncrustify.js"></script>
+
+  <!-- ✅ 2. Tree‑sitter（✅ 正确引入方式） -->
+  <script type="module">
+    import { Parser, Language } from './web-tree-sitter.js';
+
+    (async () => {
+
+      // ✅ Tree‑sitter 初始化（正确）
+      await Parser.init();
+
+      // ✅ 加载语言（CDN，永不 404）
+      const cppLang = await Language.load(
+        './wm/tree-sitter-cpp.wasm'
+      );
+
+      const parser = new Parser();
+      parser.setLanguage(cppLang);
+
+      // ✅ 去注释函数
+      function removeComments(code) {
+        const tree = parser.parse(code);
+        let result = '';
+        let lastPos = 0;
+
+        function walk(node) {
+          if (node.type === 'comment') {
+            result += code.substring(lastPos, node.startIndex);
+            lastPos = node.endIndex;
+          } else {
+            for (const child of node.children) {
+              walk(child);
+            }
+          }
+        }
+
+        walk(tree.rootNode);
+        result += code.substring(lastPos);
+        return result;
+      }
+
+      // ✅ 你的业务逻辑（完全没动）
+      const i = document.getElementById('i');
+      const o = document.getElementById('o');
+      const btnR = document.getElementById('r');
+      document.getElementById('d').onclick = () => {
+        const a = document.createElement('a');
+        a.download = 'formatted.cpp';
+        a.href = URL.createObjectURL(
+          new Blob([o.textContent], { type: 'text/plain' })
+        );
+        a.click();
+      };
+      document.getElementById('u').onclick = () => {
+        const x = document.createElement('input');
+        x.type = 'file';
+        x.accept = '.c,.cpp,.cc,.h,.hpp,.txt';
+
+        x.onchange = () => {
+          const f = x.files[0];
+          if (!f) return;
+
+          const fr = new FileReader();
+          fr.onload = () => {
+            i.value = fr.result;
+          };
+          fr.readAsText(f);
+        };
+
+        x.click();
+      };
+      i.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          e.preventDefault();                 // ✅ 阻止焦点切换
+          const s = i.selectionStart;
+          const ePos = i.selectionEnd;
+
+          i.value =
+            i.value.slice(0, s) +
+            '\t' +
+            i.value.slice(ePos);
+
+          i.selectionStart = i.selectionEnd = s + 1;
+        }
+      });
+      btnR.onclick = () => {
+        const cleaned = removeComments(i.value);
+
+        FS.writeFile('/a.cpp', cleaned);
+        FS.writeFile('uncrustify', '');
+
+        fetch(new URL('./wm/uncrustify.data', import.meta.url))
+          .then(r => r.text())
+          .then(cfg => {
+            FS.writeFile('cfg', cfg);
+            Module.callMain([
+              'uncrustify',
+              '-c',
+              '/cfg',
+              '/a.cpp',
+              '--replace'
+            ]);
+            o.textContent =
+              FS.readFile('/a.cpp', { encoding: 'utf8' });
+          });
+      };
+
+    })();
+  </script>
+</body>
+
+</html>
