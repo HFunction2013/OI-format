@@ -118,115 +118,72 @@
     </footer>
   </div>
 
-  <!-- ✅ 1. uncrustify（完全不动） -->
-  <script src="uncrustify.js"></script>
+  <script src="libUncrustify.js"></script>
 
-  <!-- ✅ 2. Tree‑sitter（✅ 正确引入方式） -->
   <script type="module">
-    import { Parser, Language } from './web-tree-sitter.js';
-
-    (async () => {
-
-      // ✅ Tree‑sitter 初始化（正确）
-      await Parser.init();
-
-      // ✅ 加载语言（CDN，永不 404）
-      const cppLang = await Language.load(
-        './wm/tree-sitter-cpp.wasm'
+    let Module = await libUncrustify();
+    const i = document.getElementById('i');
+    const o = document.getElementById('o');
+    const btnR = document.getElementById('r');
+    document.getElementById('d').onclick = () => {
+      const a = document.createElement('a');
+      a.download = 'formatted.cpp';
+      a.href = URL.createObjectURL(
+        new Blob([o.textContent], { type: 'text/plain' })
       );
+      a.click();
+    };
+    document.getElementById('u').onclick = () => {
+      const x = document.createElement('input');
+      x.type = 'file';
+      x.accept = '.c,.cpp,.cc,.h,.hpp,.txt';
 
-      const parser = new Parser();
-      parser.setLanguage(cppLang);
+      x.onchange = () => {
+        const f = x.files[0];
+        if (!f) return;
 
-      // ✅ 去注释函数
-      function removeComments(code) {
-        const tree = parser.parse(code);
-        let result = '';
-        let lastPos = 0;
-
-        function walk(node) {
-          if (node.type === 'comment') {
-            result += code.substring(lastPos, node.startIndex);
-            lastPos = node.endIndex;
-          } else {
-            for (const child of node.children) {
-              walk(child);
-            }
-          }
-        }
-
-        walk(tree.rootNode);
-        result += code.substring(lastPos);
-        return result;
-      }
-
-      // ✅ 你的业务逻辑（完全没动）
-      const i = document.getElementById('i');
-      const o = document.getElementById('o');
-      const btnR = document.getElementById('r');
-      document.getElementById('d').onclick = () => {
-        const a = document.createElement('a');
-        a.download = 'formatted.cpp';
-        a.href = URL.createObjectURL(
-          new Blob([o.textContent], { type: 'text/plain' })
-        );
-        a.click();
-      };
-      document.getElementById('u').onclick = () => {
-        const x = document.createElement('input');
-        x.type = 'file';
-        x.accept = '.c,.cpp,.cc,.h,.hpp,.txt';
-
-        x.onchange = () => {
-          const f = x.files[0];
-          if (!f) return;
-
-          const fr = new FileReader();
-          fr.onload = () => {
-            i.value = fr.result;
-          };
-          fr.readAsText(f);
+        const fr = new FileReader();
+        fr.onload = () => {
+          i.value = fr.result;
         };
-
-        x.click();
-      };
-      i.addEventListener('keydown', e => {
-        if (e.key === 'Tab') {
-          e.preventDefault();                 // ✅ 阻止焦点切换
-          const s = i.selectionStart;
-          const ePos = i.selectionEnd;
-
-          i.value =
-            i.value.slice(0, s) +
-            '\t' +
-            i.value.slice(ePos);
-
-          i.selectionStart = i.selectionEnd = s + 1;
-        }
-      });
-      btnR.onclick = () => {
-        const cleaned = removeComments(i.value);
-
-        FS.writeFile('/a.cpp', cleaned);
-        FS.writeFile('uncrustify', '');
-
-        fetch(new URL('./wm/uncrustify.data', import.meta.url))
-          .then(r => r.text())
-          .then(cfg => {
-            FS.writeFile('cfg', cfg);
-            Module.callMain([
-              'uncrustify',
-              '-c',
-              '/cfg',
-              '/a.cpp',
-              '--replace'
-            ]);
-            o.textContent =
-              FS.readFile('/a.cpp', { encoding: 'utf8' });
-          });
+        fr.readAsText(f);
       };
 
-    })();
+      x.click();
+    };
+    i.addEventListener('keydown', e => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = i.selectionStart;
+        const ePos = i.selectionEnd;
+
+        i.value =
+          i.value.slice(0, s) +
+          '\t' +
+          i.value.slice(ePos);
+
+        i.selectionStart = i.selectionEnd = s + 1;
+      }
+    });
+    btnR.onclick = () => {
+      Module.FS.writeFile('/a.cpp', i.value);
+      Module.FS.writeFile('uncrustify', '');
+
+      fetch(new URL('./uncrustify.data', import.meta.url))
+        .then(r => r.text())
+        .then(cfg => {
+          Module.FS.writeFile('cfg', cfg);
+          Module.callMain([
+            'uncrustify',
+            '-c',
+            '/cfg',
+            '/a.cpp',
+            '--replace'
+          ]);
+          o.textContent =
+            Module.FS.readFile('/a.cpp', { encoding: 'utf8' });
+        });
+    };
   </script>
 </body>
 
