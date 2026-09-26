@@ -6,13 +6,6 @@
   <title>HZFY 代码 OI 化</title>
 
   <style>
-    footer {
-      margin-top: 24px;
-      font-size: 13px;
-      color: #6b7280;
-      text-align: left;
-    }
-
     :root {
       --bg: #f6f7fb;
       --panel: #ffffff;
@@ -30,35 +23,66 @@
     }
 
     .w {
-      max-width: 1000px;
+      max-width: 1200px;
       margin: auto;
     }
 
-    .panel {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    h3 {
+      margin-top: 0;
     }
 
-    textarea,
-    pre {
-      width: 100%;
-      height: 260px;
-      padding: 12px;
-      font-family: ui-monospace, SFMono-Regular, monospace;
+    .dual-panel {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .editor-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .editor-label {
       font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .badge-input {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+
+    .badge-output {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    /* Monaco 容器 */
+    .monaco-container {
+      height: 320px;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: var(--panel);
-      resize: vertical;
-      overflow: auto;
+      overflow: hidden;
     }
 
     .b {
       display: flex;
       gap: 12px;
       justify-content: center;
-      margin-top: 16px;
+      margin-top: 8px;
     }
 
     button {
@@ -68,6 +92,11 @@
       border-radius: 999px;
       color: #fff;
       cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button:hover {
+      opacity: 0.85;
     }
 
     #r {
@@ -82,9 +111,20 @@
       background: var(--g);
     }
 
+    #swap {
+      background: #7c3aed;
+    }
+
     .drag {
       border-color: #2563eb !important;
       background: #eef2ff !important;
+    }
+
+    footer {
+      margin-top: 24px;
+      font-size: 13px;
+      color: #6b7280;
+      text-align: left;
     }
   </style>
 </head>
@@ -93,76 +133,132 @@
   <div class="w">
     <h3>HZFY 代码 OI 化</h3>
 
-    <div class="panel">
-      <textarea id="i">
-#include <iostream>
+    <!-- 双编辑器布局 -->
+    <div class="dual-panel">
+      <div class="editor-box">
+        <div class="editor-label">
+          <span>输入区</span>
+          <span class="badge badge-input">可编辑</span>
+        </div>
+        <div id="editorInput" class="monaco-container"></div>
+      </div>
+
+      <div class="editor-box">
+        <div class="editor-label">
+          <span>输出区</span>
+          <span class="badge badge-output">只读</span>
+        </div>
+        <div id="editorOutput" class="monaco-container"></div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="b">
+      <button id="u">上传</button>
+      <button id="r">格式化 →</button>
+      <button id="swap">⇄ 交换</button>
+      <button id="d">下载结果</button>
+    </div>
+  </div>
+
+  <!-- libUncrustify 加载 -->
+  <script src="libUncrustify.js"></script>
+  <!-- Monaco AMD 加载器 -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
+
+  <script>
+    require.config({
+      paths: { vs: 'https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.44.0/min/vs' }
+    });
+    const monacoReady = new Promise(resolve => {
+      require(['vs/editor/editor.main'], resolve);
+    });
+  </script>
+
+  <script type="module">
+    // 加载 Uncrustify
+    const Module = await libUncrustify();
+
+    // 等待 Monaco 就绪
+    await monacoReady;
+
+    // 创建输入编辑器（可编辑）
+    const editorInput = monaco.editor.create(
+      document.getElementById('editorInput'),
+      {
+        value: `#include <iostream>
   int main(){
       // comment
       std::cout<<"// not a comment Hello";
       return 0;
-  }
-      </textarea>
-      <pre id="o"></pre>
-    </div>
+  }`,
+        language: 'cpp',
+        theme: 'vs',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        fontSize: 14,
+        tabSize: 4,
+        insertSpaces: true
+      }
+    );
 
-    <div class="b">
-      <button id="u">上传</button>
-      <button id="r">格式化</button>
-      <button id="d">下载</button>
-    </div>
-  </div>
+    // 创建输出编辑器（只读）
+    const editorOutput = monaco.editor.create(
+      document.getElementById('editorOutput'),
+      {
+        value: '',
+        language: 'cpp',
+        theme: 'vs',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        fontSize: 14,
+        tabSize: 4,
+        insertSpaces: true,
+        readOnly: true
+      }
+    );
 
-  <script src="libUncrustify.js"></script>
-
-  <script type="module">
-    let Module = await libUncrustify();
-    const i = document.getElementById('i');
-    const o = document.getElementById('o');
-    const btnR = document.getElementById('r');
-    document.getElementById('d').onclick = () => {
-      const a = document.createElement('a');
-      a.download = 'formatted.cpp';
-      a.href = URL.createObjectURL(
-        new Blob([o.textContent], { type: 'text/plain' })
-      );
-      a.click();
-    };
+    // 上传：读文件后写入输入编辑器
     document.getElementById('u').onclick = () => {
       const x = document.createElement('input');
       x.type = 'file';
       x.accept = '.c,.cpp,.cc,.h,.hpp,.txt';
-
       x.onchange = () => {
         const f = x.files[0];
         if (!f) return;
-
         const fr = new FileReader();
-        fr.onload = () => {
-          i.value = fr.result;
-        };
+        fr.onload = () => editorInput.setValue(fr.result);
         fr.readAsText(f);
       };
-
       x.click();
     };
-    i.addEventListener('keydown', e => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const s = i.selectionStart;
-        const ePos = i.selectionEnd;
 
-        i.value =
-          i.value.slice(0, s) +
-          '\t' +
-          i.value.slice(ePos);
+    // 下载输出内容
+    document.getElementById('d').onclick = () => {
+      const a = document.createElement('a');
+      a.download = 'formatted.cpp';
+      a.href = URL.createObjectURL(
+        new Blob([editorOutput.getValue()], { type: 'text/plain' })
+      );
+      a.click();
+    };
 
-        i.selectionStart = i.selectionEnd = s + 1;
-      }
-    });
-    btnR.onclick = () => {
-      Module.FS.writeFile('/a.cpp', i.value);
+    // 交换内容（输入 <-> 输出）
+    document.getElementById('swap').onclick = () => {
+      const inVal = editorInput.getValue();
+      const outVal = editorOutput.getValue();
+      editorInput.setValue(outVal);
+      editorOutput.setValue(inVal);
+    };
+
+    // 格式化：读取输入 -> Uncrustify -> 写入输出
+    document.getElementById('r').onclick = () => {
+      // 写入待格式化文件
+      Module.FS.writeFile('/a.cpp', editorInput.getValue());
+      // 占位文件
       Module.FS.writeFile('uncrustify', '');
 
+      // 加载配置文件（同目录下的 uncrustify.data）
       fetch(new URL('./uncrustify.data', import.meta.url))
         .then(r => r.text())
         .then(cfg => {
@@ -174,8 +270,9 @@
             '/a.cpp',
             '--replace'
           ]);
-          o.textContent =
-            Module.FS.readFile('/a.cpp', { encoding: 'utf8' });
+          // 将格式化结果写入输出编辑器
+          const formatted = Module.FS.readFile('/a.cpp', { encoding: 'utf8' });
+          editorOutput.setValue(formatted);
         });
     };
   </script>
